@@ -1,0 +1,13 @@
+name = "MPASTools"
+uuid = "fd76b693-8cd5-41e0-b97a-b80f2acc2eb2"
+authors = ["Felipe A. V. de Bragança Alves <favbalves@gmail.com> and contributors"]
+version = "1.0.0-DEV"
+
+[compat]
+julia = "1"
+
+[extras]
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[targets]
+test = ["Test"]
