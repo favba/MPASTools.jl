@@ -3,6 +3,9 @@ uuid = "fd76b693-8cd5-41e0-b97a-b80f2acc2eb2"
 authors = ["Felipe A. V. de Bragança Alves <favbalves@gmail.com> and contributors"]
 version = "1.0.0-DEV"
 
+[deps]
+NCDatasets = "85f8d34a-cbdd-5861-8df4-14fed0d494ab"
+
 [compat]
 julia = "1"
 
