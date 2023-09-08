@@ -1,6 +1,7 @@
 module MPASTools
 
-export compute_errors, compute_errors_steady_state_case
+export compute_errors, compute_errors_steady_state_case, get_lon_lat_name, get_avarage_weights_name
+export get_lon_lat_rad, get_lon_lat
 
 using NCDatasets
 
@@ -97,6 +98,54 @@ function compute_errors_steady_state_case(fields::AbstractVector{T},netcdf_file:
 
         return err
     end
+end
+
+"""
+    get_lon_lat_name(NCvar)
+
+Returns the name of a MPAS mesh variable that can properly serve as Lon-Lat coordinates to `NCvar`.
+
+# Examples
+```julia-repl
+julia> get_lon_lat_name(rho) # rho is a cell centered value on MPAS
+("lonCell","latCell")
+```
+"""
+function get_lon_lat_name(var::NCDatasets.CFVariable)
+    dnames = dimnames(var)
+    name = ("","")
+    if "nCells" in dnames
+        name=("lonCell","latCell")
+    elseif "nEdges" in dnames
+        name=("lonEdge","latEdge")
+    elseif "nVertices" in dnames
+        name=("lonVertex","latVertex")
+    else
+        thorw(DomainError(var,"Variable doesn't seem to be neither a Cell, Edge, or Vertex value"))
+    end
+    return name
+end
+
+"""
+    get_lon_lat_rad(NCvar) = (lon,lat)
+
+Returns Lon-Lat array coordinates to `NCvar` in radians.
+"""
+get_lon_lat_rad(var::NCDatasets.CFVariable) = getindex.((var.var.ds,),get_lon_lat_name(var))
+
+function _myrad2deg(θ)
+   θd = rad2deg(θ)
+   return ifelse(θd <= 180, θd, θd - 360)
+end
+
+"""
+    get_lon_lat(NCvar) = (lon,lat)
+
+Returns Lon-Lat array coordinates to `NCvar` in degrees.
+"""
+function get_lon_lat(var::NCDatasets.CFVariable)
+    lon, lat = get_lon_lat_rad(var)
+    return (_myrad2deg.(lon), _myrad2deg.(lat))
 end
 
 end #module
