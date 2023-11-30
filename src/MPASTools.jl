@@ -1,6 +1,6 @@
 module MPASTools
 
-export compute_errors, compute_errors_steady_state_case, get_lon_lat_name, get_avarage_weights_name
+export compute_errors, compute_errors_steady_state_case, get_lon_lat_name, get_avarage_weights_name, get_avarage_weights
 export get_lon_lat_rad, get_lon_lat
 
 using NCDatasets
@@ -61,13 +61,30 @@ function get_avarage_weights_name(var::NCDatasets.CFVariable)
     if "nCells" in dnames
         wname="areaCell"
     elseif "nEdges" in dnames
-        wname="dvEdge"
+        wname="areaEdge"
     elseif "nVertices" in dnames
         wname="areaTriangle"
     else
-        thorw(DomainError(var,"Variable doesn't seem to be neither a Cell, Edge, or Vertex value"))
+        throw(DomainError(var,"Variable doesn't seem to be neither a Cell, Edge, or Vertex value"))
     end
     return wname
+end
+
+"""
+    get_avarage_weights(NCvar)
+
+Returns the weights to compute avarages for `NCvar`.
+"""
+get_avarage_weights(var::NCDatasets.CFVariable) = _get_avarage_weights(var.var.ds,get_avarage_weights_name(var))
+
+function _get_avarage_weights(nc,weight_name)
+    if weight_name == "areaEdge"
+        return  0.5 .* nc["dvEdge"][:] .* nc["dcEdge"][:]
+    elseif weight_name in ("areaCell", "areaTriangle")
+        return nc[weight_name][:]
+    else
+        throw(DomainError(weight_name,"Weight name '$weight_name' is not a proper weight"))
+    end
 end
 
 """
@@ -86,7 +103,7 @@ function compute_errors_steady_state_case(fields::AbstractVector{T},netcdf_file:
         Threads.@sync for (i,field) in enumerate(fields)
             var = nc[field]
             weight_name = get_avarage_weights_name(var)
-            weight_name ∉ keys(dic) && (dic[weight_name] = nc[weight_name][:])
+            weight_name ∉ keys(dic) && (dic[weight_name] = get_avarage_weights(var))
             result = var[:,:,end]
             exact = var[:,:,1]
             let i=i, weight_name=weight_name, result=result, exact=exact
