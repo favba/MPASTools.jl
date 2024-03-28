@@ -2,14 +2,18 @@ module MPASTools
 
 export compute_errors, compute_errors_steady_state_case, get_lon_lat_name, get_avarage_weights_name, get_avarage_weights
 export get_lon_lat_rad, get_lon_lat
+export create_planar_mesh_main
 
-using NCDatasets
+using NCDatasets, TensorsLite, TensorsLiteGeometry, VoronoiMeshDataStruct, ArgParse
+import CondaPkg
 
 const nominal_resolution_ncar_meshes = (480.0,383.0,240.0,120.0,60.0,48.0,30.0,24.0,15.0,12.0,10.0,7.5,5.0,4.0,3.75,3.0)
 
 const ncells_ncar_meshes = (2562,4002,10242,40962,163842,256002,655362,1024002,2621442,4096002,5898242,10485762,23592962,36864002,41943042,65536002)
 
 const link_ncar_meshes = string.(("https://www2.mmm.ucar.edu/projects/mpas/atmosphere_meshes/x1.",),ncells_ncar_meshes,(".tar.gz",))
+
+include("planar_mesh_creation.jl")
 
 """
     compute_errors(result,exact,weight)
