@@ -2,7 +2,7 @@ module MPASTools
 
 export compute_errors, compute_errors_steady_state_case, get_lon_lat_name, get_avarage_weights_name, get_avarage_weights
 export get_lon_lat_rad, get_lon_lat
-export create_planar_mesh_main
+export create_distorted_planar_mesh, create_distorted_planar_mesh_main
 
 using NCDatasets, TensorsLite, TensorsLiteGeometry, VoronoiMeshDataStruct, ArgParse
 import CondaPkg

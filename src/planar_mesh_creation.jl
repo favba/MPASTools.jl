@@ -1,34 +1,3 @@
-function parse_commandline_create_planar_mesh(args)
-    s = ArgParseSettings()
-
-    @add_arg_table! s begin
-        "--lx"
-            help = "Target x direction mesh length in meters"
-            arg_type = Float64
-            required = true
-        "--ly"
-            help = "Target y direction mesh length in meters"
-            arg_type = Float64
-            required = true
-        "--dc"
-            help = "Distance between cell centers in meters"
-            arg_type = Float64
-            required = true
-        "--perturbation", "-p"
-            help = "Maximum perturbation ratio 'p' allowed in the distorted mesh: maximum perturbation = p*dc"
-            arg_type = Float64
-            default = 0.18
-        "--outFileName", "-o"
-            help = "The name of the output file"
-            arg_type = String
-            default = "mesh.nc"
-    end
-
-    return parse_args(args,s)
-end
-
-precompile(parse_commandline_create_planar_mesh,(Vector{String},))
-
 @inline function perturb_point(r::Number,p)
     θ = acos(rand(-1.0:0.01:1.0))
     pert = rand(0.5:0.01:1.0)*r*Vec(x=cos(θ),y=sin(θ))
@@ -134,7 +103,47 @@ end
 
 precompile(distort_periodic_mesh,(String,Float64))
 
-function create_planar_mesh_main(args)
+
+function create_distorted_planar_mesh(lx::Number,ly::Number,dc::Number,p::Number,o::String)
+    create_planar_hex_mesh(o,lx,ly,dc)
+    distort_periodic_mesh(o,p*dc)
+    return 0
+end
+
+precompile(create_distorted_planar_mesh,(Float64,Float64,Float64,Float64,String))
+
+function parse_commandline_create_planar_mesh(args)
+    s = ArgParseSettings()
+
+    @add_arg_table! s begin
+        "--lx"
+            help = "Target x direction mesh length in meters"
+            arg_type = Float64
+            required = true
+        "--ly"
+            help = "Target y direction mesh length in meters"
+            arg_type = Float64
+            required = true
+        "--dc"
+            help = "Distance between cell centers in meters"
+            arg_type = Float64
+            required = true
+        "--perturbation", "-p"
+            help = "Maximum perturbation ratio 'p' allowed in the distorted mesh: maximum perturbation = p*dc"
+            arg_type = Float64
+            default = 0.18
+        "--outFileName", "-o"
+            help = "The name of the output file"
+            arg_type = String
+            default = "mesh.nc"
+    end
+
+    return parse_args(args,s)
+end
+
+precompile(parse_commandline_create_planar_mesh,(Vector{String},))
+
+function create_distorted_planar_mesh_main(args)
     parsed_args = parse_commandline_create_planar_mesh(args)
     isnothing(parsed_args) && return 0
     lx::Float64 = parsed_args["lx"]
@@ -146,9 +155,8 @@ function create_planar_mesh_main(args)
     end
     o::String = parsed_args["outFileName"]
 
-    create_planar_hex_mesh(o,lx,ly,dc)
-    distort_periodic_mesh(o,p*dc)
+    create_distorted_planar_mesh(lx,ly,dc,p,o)
     return 0
 end
 
-precompile(create_planar_mesh_main,(Vector{String},))
+precompile(create_distorted_planar_mesh_main,(Vector{String},))
