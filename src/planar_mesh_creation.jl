@@ -113,27 +113,27 @@ end
 precompile(create_distorted_planar_mesh,(Float64,Float64,Float64,Float64,String))
 
 function parse_commandline_create_planar_mesh(args)
-    s = ArgParseSettings()
+    s = ArgParseSettings(description="This program generates two planar periodic meshes suitable for usage with MPAS, the first one has homogeneous hexagonal elements and the second one is a distorted version of the first.")
 
     @add_arg_table! s begin
         "--lx"
-            help = "Target x direction mesh length in meters"
+            help = "Target x direction mesh period in meters (won't be exact unless it is divisable by 'dc'.)"
             arg_type = Float64
             required = true
         "--ly"
-            help = "Target y direction mesh length in meters"
+            help = "Target y direction mesh period in meters (will not be exact)"
             arg_type = Float64
             required = true
         "--dc"
-            help = "Distance between cell centers in meters"
+            help = "Enforced distance between cell centers in meters for the homogeneous mesh"
             arg_type = Float64
             required = true
         "--perturbation", "-p"
-            help = "Maximum perturbation ratio 'p' allowed in the distorted mesh: maximum perturbation = p*dc"
+            help = "Maximum perturbation ratio 'p' allowed in the distorted mesh regarding 'dc'. That is, maximum allowed perturbation = p*dc"
             arg_type = Float64
             default = 0.18
         "--outFileName", "-o"
-            help = "The name of the output file"
+            help = "The name for the output file of the homogeneous mesh. If the file name is 'mesh.nc', the distorted mesh will be named 'mesh_distorted.nc'."
             arg_type = String
             default = "mesh.nc"
     end
