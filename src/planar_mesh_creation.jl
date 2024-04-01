@@ -144,7 +144,8 @@ end
 precompile(parse_commandline_create_planar_mesh,(Vector{String},))
 
 function create_distorted_planar_mesh_main(args)
-    parsed_args = parse_commandline_create_planar_mesh(args)
+    local_args = isempty(args) ? ["-h"] : args
+    parsed_args = parse_commandline_create_planar_mesh(local_args)
     isnothing(parsed_args) && return 0
     lx::Float64 = parsed_args["lx"]
     ly::Float64 = parsed_args["ly"]
