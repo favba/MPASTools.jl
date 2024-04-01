@@ -40,10 +40,20 @@ function compute_new_circumcenters_periodic(cell_pos,vert_pos,cellsOnVertex,x_pe
     result = similar(vert_pos)
     return compute_new_circumcenters_periodic!(result,cell_pos,vert_pos,cellsOnVertex,x_period,y_period)
 end
+@inline function round_to_even_Int(x::Real)
+    ru = round(Int,x,RoundUp)
+    rd = round(Int,x,RoundDown)
+    if ru == rd
+        val = ru + mod(ru,2)
+    else
+        val = iseven(ru) ? ru : rd
+    end
+    return val
+end
 
 function create_planar_hex_mesh(filename::AbstractString,lx::Number,ly::Number,dc::Number)
-    nx = Int(lx÷dc)
-    ny = Int((2ly)÷(√3*dc))
+    nx = round(Int,lx/dc)
+    ny = round_to_even_Int((2ly)/(√3*dc))
     ny+=mod(ny,2)
     temp_o = splitext(filename)[1]*"_hdf5.nc"
     CondaPkg.withenv() do
