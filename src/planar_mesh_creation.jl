@@ -106,9 +106,16 @@ function distort_periodic_mesh(infile::AbstractString,pert_val::Number)
     finalfile = splitext(infile)[1]*"_distorted.nc"
     CondaPkg.withenv() do
         run(`MpasMeshConverter.x $outfile $finalfilehdf5`)
+        #Fix areaTrianlge field, which is computed incorrectly by mpas_tools
+        NCDataset(finalfilehdf5,"a") do f
+            mesh = VoronoiMesh(f)
+            f["areaTriangle"] .= area.((mesh.vertices.position,),mesh.cells.indices.vertices,(mesh.attributes[:x_period],),(mesh.attributes[:y_period],))
+        end
         run(`nccopy -6 $finalfilehdf5 $finalfile`)
         run(`rm $outfile $finalfilehdf5`)
     end
+
+    return 0
 end
 
 precompile(distort_periodic_mesh,(String,Float64))
