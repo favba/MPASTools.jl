@@ -109,7 +109,17 @@ function distort_periodic_mesh(infile::AbstractString,pert_val::Number)
         #Fix areaTrianlge field, which is computed incorrectly by mpas_tools
         NCDataset(finalfilehdf5,"a") do f
             mesh = VoronoiMesh(f)
-            f["areaTriangle"] .= area.((mesh.cells.position,),mesh.vertices.indices.cells,(mesh.attributes[:x_period],),(mesh.attributes[:y_period],))
+            area_vertex = compute_area_triangles(mesh)
+            kite_areas = compute_kite_areas(mesh)
+            ka = f["kiteAreasOnVertex"]
+            at = f["areaTriangle"]
+            @inbounds for i in eachindex(kite_areas)
+                at[i] = area_vertex[i]
+                a1,a2,a3 = kite_areas[i]
+                ka[1,i] = a1
+                ka[2,i] = a2
+                ka[3,i] = a3
+            end
         end
         run(`nccopy -6 $finalfilehdf5 $finalfile`)
         run(`rm $outfile $finalfilehdf5`)
