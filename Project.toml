@@ -5,11 +5,13 @@ version = "1.0.0-DEV"
 
 [deps]
 ArgParse = "c7e460c6-2fb9-53a9-8c5b-16f535851c63"
+CommonDataModel = "1fbeeb36-5f17-413c-809b-666fb144f157"
 CondaPkg = "992eb4ea-22a4-4c89-a5bb-47a3300528ab"
 NCDatasets = "85f8d34a-cbdd-5861-8df4-14fed0d494ab"
 TensorsLite = "1a1b94bd-d244-45e0-965a-8acfeb92b70f"
 TensorsLiteGeometry = "f9cc0174-84f8-4243-a119-6cf6c33db921"
 VoronoiMeshDataStruct = "8a938a65-3ddb-45e8-9de7-ea9d95686e1a"
+Zeros = "bd1ec220-6eb4-527a-9b49-e79c3db6233b"
 
 [compat]
 julia = "1.9"
