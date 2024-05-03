@@ -65,9 +65,13 @@ end
 
 precompile(create_planar_hex_mesh,(String,Float64,Float64,Float64,Float64))
 
+import CommonDataModel
+
+const NCArrayType{T,N} = CommonDataModel.CFVariable{T, N, NCDatasets.Variable{T, N, NCDataset{Nothing, Missing}}, CommonDataModel.Attributes{NCDatasets.Variable{T, N, NCDataset{Nothing, Missing}}}, @NamedTuple{fillvalue::Nothing, missing_values::Tuple{}, scale_factor::Nothing, add_offset::Nothing, calendar::Nothing, time_origin::Nothing, time_factor::Nothing, maskingvalue::Missing}}
+
 function distort_periodic_mesh(infile::AbstractString,pert_val::Number)
 
-    outfile = splitext(infile)[1]*"_distorted_incomplete.nc"
+    outfile = splitext(infile)[1]*"_distorted_hdf5.nc"
     innc = NCDataset(infile)
     outnc = NCDataset(outfile,"c")
     
@@ -79,57 +83,75 @@ function distort_periodic_mesh(infile::AbstractString,pert_val::Number)
         outnc.attrib[attname] = val
     end
     
-    cells = CellBase(innc)
-    vertices = VertexBase(innc)
-    new_cells_pos = perturb_points(pert_val,cells.position)
-    new_vert_pos = compute_new_circumcenters_periodic(new_cells_pos,vertices.position,vertices.indices.cells,innc.attrib["x_period"],innc.attrib["y_period"])
+    for field in ("latCell","lonCell","xCell","yCell","zCell","indexToCellID",
+                  "latEdge","lonEdge","xEdge","yEdge","zEdge","indexToEdgeID",
+                  "latVertex","lonVertex","xVertex","yVertex","zVertex","indexToVertexID",
+                  "nEdgesOnCell","nEdgesOnEdge","cellsOnEdge","edgesOnCell","edgesOnEdge",
+                  "cellsOnCell","verticesOnCell","verticesOnEdge","edgesOnVertex",
+                  "cellsOnVertex","weightsOnEdge","dvEdge","dcEdge","angleEdge","areaCell",
+                  "areaTriangle","kiteAreasOnVertex","meshDensity")
+        defVar(outnc,innc[field])
+    end
 
-    new_xCell = defVar(outnc,innc["xCell"])
-    copy!(new_xCell,new_cells_pos.x)
-    new_yCell = defVar(outnc,innc["yCell"])
-    copy!(new_yCell,new_cells_pos.y)
-    defVar(outnc,innc["zCell"])
-
-    new_xVertex = defVar(outnc,innc["xVertex"])
-    copy!(new_xVertex,new_vert_pos.x)
-    new_yVertex = defVar(outnc,innc["yVertex"])
-    copy!(new_yVertex,new_vert_pos.y)
-    defVar(outnc,innc["zVertex"])
-
-    defVar(outnc,innc["cellsOnVertex"])
-    defVar(outnc,innc["meshDensity"])
+    cells = CellBase(innc)::CellBase{false,6,Int32,Float64,Zeros.Zero}
+    vertices = VertexBase(innc)::VertexBase{false,Int32,Float64,Zeros.Zero}
+    edges = EdgeBase(innc)::EdgeBase{false,Int32,Float64,Zeros.Zero}
+    velRecon = EdgeVelocityReconstruction(innc)::EdgeVelocityReconstruction{10,Int32,Float64}
+    xp = innc.attrib["x_period"]::Float64
+    yp = innc.attrib["y_period"]::Float64
 
     close(innc)
+
+    new_cells_pos = perturb_points(pert_val,cells.position)
+    new_vert_pos = compute_new_circumcenters_periodic(new_cells_pos,vertices.position,vertices.indices.cells,xp,yp)
+
+    copyto!(outnc["xCell"]::NCArrayType{Float64,1},new_cells_pos.x)
+    copyto!(outnc["yCell"]::NCArrayType{Float64,1},new_cells_pos.y)
+
+    copyto!(outnc["xVertex"]::NCArrayType{Float64,1},new_vert_pos.x)
+    copyto!(outnc["yVertex"]::NCArrayType{Float64,1},new_vert_pos.y)
+
+    cells.position .= new_cells_pos
+    vertices.position .= new_vert_pos
+
+    at = compute_area_triangles(vertices,cells,xp,yp)
+    copyto!(outnc["areaTriangle"]::NCArrayType{Float64,1},at)
+
+    compute_edge_position!(edges.position,edges,cells,xp,yp)
+    copyto!(outnc["xEdge"]::NCArrayType{Float64,1},edges.position.x)
+    copyto!(outnc["yEdge"]::NCArrayType{Float64,1},edges.position.y)
+
+    dcEdge = compute_dcEdge(edges,cells,xp,yp)
+    copyto!(outnc["dcEdge"]::NCArrayType{Float64,1},dcEdge)
+
+    dvEdge = compute_dvEdge(edges,vertices,xp,yp)
+    copyto!(outnc["dvEdge"]::NCArrayType{Float64,1},dvEdge)
+
+    compute_angleEdge!(outnc["angleEdge"]::NCArrayType{Float64,1},edges,cells,xp,yp)
+    copyto!(outnc["angleEdge"]::NCArrayType{Float64,1}, compute_angleEdge(edges,cells,xp,yp))
+
+    areaCell = compute_area_cells(cells,vertices,xp,yp)
+    copyto!(outnc["areaCell"]::NCArrayType{Float64,1},areaCell)
+
+    kite_areas = compute_kite_areas(vertices,cells,xp,yp)
+    copyto!(outnc["kiteAreasOnVertex"]::NCArrayType{Float64,2}, reinterpret(reshape,Float64,kite_areas))
+
+    fill!(velRecon.weights,zero(eltype(velRecon.weights)))
+    compute_weightsOnEdge_trisk!(velRecon.weights,edges,velRecon,cells,vertices,dcEdge,dvEdge,kite_areas,areaCell)
+    copyto!(outnc["weightsOnEdge"]::NCArrayType{Float64,2},CartesianIndices(axes(velRecon.weights)),velRecon.weights,CartesianIndices(axes(velRecon.weights)))
+
     close(outnc)
 
-    finalfilehdf5 = splitext(infile)[1]*"_distorted_hdf5.nc"
     finalfile = splitext(infile)[1]*"_distorted.nc"
     CondaPkg.withenv() do
-        run(`MpasMeshConverter.x $outfile $finalfilehdf5`)
-        #Fix areaTrianlge field, which is computed incorrectly by mpas_tools
-        NCDataset(finalfilehdf5,"a") do f
-            mesh = VoronoiMesh(f)
-            area_vertex = compute_area_triangles(mesh)
-            kite_areas = compute_kite_areas(mesh)
-            ka = f["kiteAreasOnVertex"]
-            at = f["areaTriangle"]
-            @inbounds for i in eachindex(kite_areas)
-                at[i] = area_vertex[i]
-                a1,a2,a3 = kite_areas[i]
-                ka[1,i] = a1
-                ka[2,i] = a2
-                ka[3,i] = a3
-            end
-        end
-        run(`nccopy -6 $finalfilehdf5 $finalfile`)
-        run(`rm $outfile $finalfilehdf5`)
+        run(`nccopy -6 $outfile $finalfile`)
+        run(`rm $outfile`)
     end
 
     return 0
 end
 
 precompile(distort_periodic_mesh,(String,Float64))
-
 
 function create_distorted_planar_mesh(lx::Number,ly::Number,dc::Number,p::Number,o::String)
     create_planar_hex_mesh(o,lx,ly,dc)

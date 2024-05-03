@@ -4,7 +4,7 @@ export compute_errors, compute_errors_steady_state_case, get_lon_lat_name, get_a
 export get_lon_lat_rad, get_lon_lat
 export create_distorted_planar_mesh, create_distorted_planar_mesh_main
 
-using NCDatasets, TensorsLite, TensorsLiteGeometry, VoronoiMeshDataStruct, ArgParse
+using NCDatasets, TensorsLite, TensorsLiteGeometry, VoronoiMeshDataStruct, ArgParse, Zeros
 import CondaPkg
 
 const nominal_resolution_ncar_meshes = (480.0,383.0,240.0,120.0,60.0,48.0,30.0,24.0,15.0,12.0,10.0,7.5,5.0,4.0,3.75,3.0)
