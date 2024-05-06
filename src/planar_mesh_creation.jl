@@ -95,7 +95,8 @@ const NCArrayType{T,N} = CommonDataModel.CFVariable{T, N, NCDatasets.Variable{T,
 
 function distort_periodic_mesh(infile::AbstractString,pert_val::Number)
 
-    outfile = splitext(infile)[1]*"_distorted_hdf5.nc"
+    in_file_name = splitext(infile)[1]
+    outfile = in_file_name*"_distorted_hdf5.nc"
     innc = NCDataset(infile)
     outnc = NCDataset(outfile,"c")
     
@@ -168,7 +169,11 @@ function distort_periodic_mesh(infile::AbstractString,pert_val::Number)
  
     close(outnc)
 
-    finalfile = splitext(infile)[1]*"_distorted.nc"
+    open(in_file_name*"_graph.info","w") do f
+        write(f,graph_partition(cells,edges))
+    end
+
+    finalfile = in_file_name*"_distorted.nc"
     CondaPkg.withenv() do
         run(`nccopy -6 $outfile $finalfile`)
         run(`rm $outfile`)
