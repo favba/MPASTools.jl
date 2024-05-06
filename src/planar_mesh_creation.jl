@@ -40,6 +40,7 @@ function compute_new_circumcenters_periodic(cell_pos,vert_pos,cellsOnVertex,x_pe
     result = similar(vert_pos)
     return compute_new_circumcenters_periodic!(result,cell_pos,vert_pos,cellsOnVertex,x_period,y_period)
 end
+
 @inline function round_to_even_Int(x::Real)
     ru = round(Int,x,RoundUp)
     rd = round(Int,x,RoundDown)
@@ -51,6 +52,26 @@ end
     return val
 end
 
+function prepend_string_to_history(ncfile,s)
+    if haskey(ncfile.attrib,"history")
+        cs = ncfile.attrib["history"]
+        ncfile.attrib["history"] = string(s,'\n',cs)
+    else
+        ncfile.attrib["history"] = s
+    end
+    return ncfile.attrib["history"]
+end
+
+function append_string_to_history(ncfile,s)
+    if haskey(ncfile.attrib,"history")
+        cs = ncfile.attrib["history"]
+        ncfile.attrib["history"] = string(cs,'\n',s)
+    else
+        ncfile.attrib["history"] = s
+    end
+    return ncfile.attrib["history"]
+end
+
 function create_planar_hex_mesh(filename::AbstractString,lx::Number,ly::Number,dc::Number)
     nx = round(Int,lx/dc)
     ny = round_to_even_Int((2ly)/(√3*dc))
@@ -59,6 +80,9 @@ function create_planar_hex_mesh(filename::AbstractString,lx::Number,ly::Number,d
     CondaPkg.withenv() do
         run(`planar_hex --nx $nx --ny $ny --dc $dc -o $temp_o`)
         run(`nccopy -6 $temp_o $filename`)
+        NCDataset(filename,"a") do f
+            prepend_string_to_history(f,string("nccopy -6 ",temp_o," ",filename))
+        end
         run(`rm $temp_o`)
     end
 end
@@ -140,6 +164,8 @@ function distort_periodic_mesh(infile::AbstractString,pert_val::Number)
     compute_weightsOnEdge_trisk!(velRecon.weights,edges,velRecon,cells,vertices,dcEdge,dvEdge,kite_areas,areaCell)
     copyto!(outnc["weightsOnEdge"]::NCArrayType{Float64,2},CartesianIndices(axes(velRecon.weights)),velRecon.weights,CartesianIndices(axes(velRecon.weights)))
 
+    prepend_string_to_history(outnc,"""julia -e 'using MPASTools; MPASTools.distort_periodic_mesh("$infile",$pert_val)'""")
+ 
     close(outnc)
 
     finalfile = splitext(infile)[1]*"_distorted.nc"
@@ -155,6 +181,9 @@ precompile(distort_periodic_mesh,(String,Float64))
 
 function create_distorted_planar_mesh(lx::Number,ly::Number,dc::Number,p::Number,o::String)
     create_planar_hex_mesh(o,lx,ly,dc)
+    NCDataset(o,"a") do f
+        append_string_to_history(f,string("create_distorted_planar_mesh.jl --dc ",dc," -p ",p," --lx ",lx," --ly ",ly, " -o ",o))
+    end
     distort_periodic_mesh(o,p*dc)
     return 0
 end
