@@ -139,6 +139,10 @@ function distort_periodic_mesh(infile::AbstractString,pert_val::Number)
     cells.position .= new_cells_pos
     vertices.position .= new_vert_pos
 
+    n_obtuse_triangles = length(find_obtuse_triangles(vertices,cells,xp,yp))
+
+    n_obtuse_triangles != 0 && @warn "Mesh distortion produced $n_obtuse_triangles obtuse triangles. Consider using a smaller perturbation value"
+
     at = compute_area_triangles(vertices,cells,xp,yp)
     copyto!(outnc["areaTriangle"]::NCArrayType{Float64,1},at)
 
