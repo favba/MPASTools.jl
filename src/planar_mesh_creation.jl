@@ -165,7 +165,6 @@ function distort_periodic_mesh(infile::AbstractString,pert_val::Number)
     kite_areas = compute_kite_areas(vertices,cells,xp,yp)
     copyto!(outnc["kiteAreasOnVertex"]::NCArrayType{Float64,2}, reinterpret(reshape,Float64,kite_areas))
 
-    fill!(velRecon.weights,zero(eltype(velRecon.weights)))
     velReconweights = compute_weightsOnEdge_trisk(edges.verticesOnEdge,edges.cellsOnEdge,velRecon.indices,dcEdge,dvEdge,kite_areas,vertices.cellsOnVertex,cells.nEdgesOnCell,areaCell)
     copyto!(outnc["weightsOnEdge"]::NCArrayType{Float64,2},CartesianIndices(axes(velReconweights)),velReconweights,CartesianIndices(axes(velReconweights)))
 
