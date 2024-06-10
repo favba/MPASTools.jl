@@ -166,8 +166,8 @@ function distort_periodic_mesh(infile::AbstractString,pert_val::Number)
     copyto!(outnc["kiteAreasOnVertex"]::NCArrayType{Float64,2}, reinterpret(reshape,Float64,kite_areas))
 
     fill!(velRecon.weights,zero(eltype(velRecon.weights)))
-    compute_weightsOnEdge_trisk!(velRecon.weights,edges,velRecon,cells,vertices,dcEdge,dvEdge,kite_areas,areaCell)
-    copyto!(outnc["weightsOnEdge"]::NCArrayType{Float64,2},CartesianIndices(axes(velRecon.weights)),velRecon.weights,CartesianIndices(axes(velRecon.weights)))
+    velReconweights = compute_weightsOnEdge_trisk(edges.verticesOnEdge,edges.cellsOnEdge,velRecon.indices,dcEdge,dvEdge,kite_areas,vertices.cellsOnVertex,cells.nEdgesOnCell,areaCell)
+    copyto!(outnc["weightsOnEdge"]::NCArrayType{Float64,2},CartesianIndices(axes(velReconweights)),velReconweights,CartesianIndices(axes(velReconweights)))
 
     prepend_string_to_history(outnc,"""julia -e 'using MPASTools; MPASTools.distort_periodic_mesh("$infile",$pert_val)'""")
  
