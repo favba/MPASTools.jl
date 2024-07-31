@@ -5,8 +5,8 @@
 end
 
 function perturb_points!(out,r::Number,points)
-    @inbounds for i in eachindex(points)
-        out[i] = perturb_point(r,points[i])
+    Threads.@threads for i in eachindex(points)
+        @inbounds out[i] = perturb_point(r,points[i])
     end
     return out
 end
@@ -18,7 +18,7 @@ end
 
 function compute_new_circumcenters_periodic!(result, cell_pos, vert_pos, cellsOnVertex, x_period::Number, y_period::Number)
 
-    @inbounds @inline for i in eachindex(result)
+    @inbounds @inline Threads.@threads for i in eachindex(result)
         ind_cells = cellsOnVertex[i]
         vertex_pos = vert_pos[i]
         cell1_pos = cell_pos[ind_cells[1]]
@@ -118,63 +118,105 @@ function distort_periodic_mesh(infile::AbstractString,pert_val::Number)
         defVar(outnc,innc[field])
     end
 
-    cells = CellBase(innc)::CellBase{false,6,Int32,Float64,Zeros.Zero}
-    vertices = VertexBase(innc)::VertexBase{false,Int32,Float64,Zeros.Zero}
-    edges = EdgeBase(innc)::EdgeBase{false,Int32,Float64,Zeros.Zero}
-    velRecon = EdgeVelocityReconstruction(innc)::EdgeVelocityReconstruction{10,Int32,Float64}
     xp = innc.attrib["x_period"]::Float64
     yp = innc.attrib["y_period"]::Float64
 
-    close(innc)
+    cells = CellBase(innc)::CellBase{false,6,Int32,Float64,Zeros.Zero}
+    task_vertices = Threads.@spawn VertexBase($innc)
 
     new_cells_pos = perturb_points(pert_val,cells.position)
+
+    t1 = Threads.@spawn begin
+        (outnc["xCell"]::NCArrayType{Float64,1})[:] = new_cells_pos.x
+        (outnc["yCell"]::NCArrayType{Float64,1})[:] = new_cells_pos.y
+        nothing
+    end
+
+    vertices = fetch(task_vertices)::VertexBase{false,Int32,Float64,Zeros.Zero}
+    task_edges = Threads.@spawn EdgeBase($innc)
+
     new_vert_pos = compute_new_circumcenters_periodic(new_cells_pos,vertices.position,vertices.indices.cells,xp,yp)
 
-    copyto!(outnc["xCell"]::NCArrayType{Float64,1},new_cells_pos.x)
-    copyto!(outnc["yCell"]::NCArrayType{Float64,1},new_cells_pos.y)
-
-    copyto!(outnc["xVertex"]::NCArrayType{Float64,1},new_vert_pos.x)
-    copyto!(outnc["yVertex"]::NCArrayType{Float64,1},new_vert_pos.y)
+    t2 = Threads.@spawn begin
+        wait(t1)
+        (outnc["xVertex"]::NCArrayType{Float64,1})[:] = new_vert_pos.x
+        (outnc["yVertex"]::NCArrayType{Float64,1})[:] = new_vert_pos.y
+        nothing
+    end
 
     cells.position .= new_cells_pos
     vertices.position .= new_vert_pos
 
-    n_obtuse_triangles = length(find_obtuse_triangles(vertices,cells,xp,yp))
+    t3 = Threads.@spawn begin
+        n_obtuse_triangles = length(find_obtuse_triangles(vertices,cells,xp,yp))
+        n_obtuse_triangles != 0 && @warn "Mesh distortion produced $n_obtuse_triangles obtuse triangles. Consider using a smaller perturbation value"
+        nothing
+    end
 
-    n_obtuse_triangles != 0 && @warn "Mesh distortion produced $n_obtuse_triangles obtuse triangles. Consider using a smaller perturbation value"
+    t4 = Threads.@spawn begin
+        at = compute_area_triangles(vertices,cells,xp,yp)
+        wait(t2)
+        (outnc["areaTriangle"]::NCArrayType{Float64,1})[:] = at
+    end
 
-    at = compute_area_triangles(vertices,cells,xp,yp)
-    copyto!(outnc["areaTriangle"]::NCArrayType{Float64,1},at)
+    edges = fetch(task_edges)::EdgeBase{false,Int32,Float64,Zeros.Zero}
+    task_velRecon = Threads.@spawn EdgeVelocityReconstruction($innc)
 
-    compute_edge_position!(edges.position,edges,cells,xp,yp)
-    copyto!(outnc["xEdge"]::NCArrayType{Float64,1},edges.position.x)
-    copyto!(outnc["yEdge"]::NCArrayType{Float64,1},edges.position.y)
+    t5 = Threads.@spawn begin
+        compute_edge_position!(edges.position,edges,cells,xp,yp)
+        wait(t4)
+        (outnc["xEdge"]::NCArrayType{Float64,1})[:] = edges.position.x
+        (outnc["yEdge"]::NCArrayType{Float64,1})[:] = edges.position.y
+    end
 
     dcEdge = compute_dcEdge(edges,cells,xp,yp)
-    copyto!(outnc["dcEdge"]::NCArrayType{Float64,1},dcEdge)
+    t6 = Threads.@spawn begin
+        wait(t5)
+        (outnc["dcEdge"]::NCArrayType{Float64,1})[:] = dcEdge
+    end
 
     dvEdge = compute_dvEdge(edges,vertices,xp,yp)
-    copyto!(outnc["dvEdge"]::NCArrayType{Float64,1},dvEdge)
+    t7 = Threads.@spawn begin
+        wait(t6)
+        (outnc["dvEdge"]::NCArrayType{Float64,1})[:] = dvEdge
+    end
 
-    compute_angleEdge!(outnc["angleEdge"]::NCArrayType{Float64,1},edges,cells,xp,yp)
-    copyto!(outnc["angleEdge"]::NCArrayType{Float64,1}, compute_angleEdge(edges,cells,xp,yp))
+    t8 = Threads.@spawn begin
+        angleEdge = compute_angleEdge(edges,cells,xp,yp)
+        wait(t7)
+        (outnc["angleEdge"]::NCArrayType{Float64,1})[:] = angleEdge
+    end
 
     areaCell = compute_area_cells(cells,vertices,xp,yp)
-    copyto!(outnc["areaCell"]::NCArrayType{Float64,1},areaCell)
+    t9 = Threads.@spawn begin
+        wait(t8)
+        (outnc["areaCell"]::NCArrayType{Float64,1})[:] = areaCell
+    end
 
     kite_areas = compute_kite_areas(vertices,cells,xp,yp)
-    copyto!(outnc["kiteAreasOnVertex"]::NCArrayType{Float64,2}, reinterpret(reshape,Float64,kite_areas))
+    t10 = Threads.@spawn begin
+        wait(t9) 
+        (outnc["kiteAreasOnVertex"]::NCArrayType{Float64,2})[:,:] = reinterpret(reshape,Float64,kite_areas)
+    end
+
+    velRecon = fetch(task_velRecon)::EdgeVelocityReconstruction{10,Int32,Float64}
 
     velReconweights = compute_weightsOnEdge_trisk(edges.verticesOnEdge,edges.cellsOnEdge,velRecon.indices,dcEdge,dvEdge,kite_areas,vertices.cellsOnVertex,cells.nEdgesOnCell,areaCell)
-    copyto!(outnc["weightsOnEdge"]::NCArrayType{Float64,2},CartesianIndices(axes(velReconweights)),velReconweights,CartesianIndices(axes(velReconweights)))
+
+    wait(t10)
+    (outnc["weightsOnEdge"]::NCArrayType{Float64,2})[axes(velReconweights,1),axes(velReconweights,2)] = velReconweights
 
     prepend_string_to_history(outnc,"""julia -e 'using MPASTools; MPASTools.distort_periodic_mesh("$infile",$pert_val)'""")
  
+    close(innc)
+
     close(outnc)
 
     open(in_file_name*"_graph.info","w") do f
         write(f,graph_partition(cells,edges))
     end
+
+    wait(t3)
 
     finalfile = in_file_name*"_distorted.nc"
     CondaPkg.withenv() do
