@@ -5,7 +5,7 @@
 end
 
 function perturb_points!(out,r::Number,points)
-    Threads.@threads for i in eachindex(points)
+    @parallel for i in eachindex(points)
         @inbounds out[i] = perturb_point(r,points[i])
     end
     return out
@@ -18,7 +18,8 @@ end
 
 function compute_new_circumcenters_periodic!(result, cell_pos, vert_pos, cellsOnVertex, x_period::Number, y_period::Number)
 
-    @inbounds @inline Threads.@threads for i in eachindex(result)
+    @parallel for i in eachindex(result)
+        @inline @inbounds begin
         ind_cells = cellsOnVertex[i]
         vertex_pos = vert_pos[i]
         cell1_pos = cell_pos[ind_cells[1]]
@@ -31,6 +32,7 @@ function compute_new_circumcenters_periodic!(result, cell_pos, vert_pos, cellsOn
         cell_3 = closest(vertex_pos,cell3_pos,x_period,y_period)
 
         result[i] = circumcenter(cell_1,cell_2,cell_3)
+        end
     end
 
     return result
